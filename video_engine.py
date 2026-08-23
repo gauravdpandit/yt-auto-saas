@@ -9,7 +9,7 @@ from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
 # 1. Generate Script (In Hindi) & Keywords (In English)
 def get_script_and_keywords(gemini_key: str, topic: str):
     genai.configure(api_key=gemini_key)
-    model = genai.GenerativeModel('gemini-1.5-flash')
+    model = genai.GenerativeModel('gemini-pro')
     
     prompt = f"""
     Write a highly engaging 30-second YouTube shorts script about '{topic}'.
