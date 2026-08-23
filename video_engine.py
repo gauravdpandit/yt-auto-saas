@@ -1,3 +1,9 @@
+# --- ULTIMATE PIL PATCH (Fixes ANTIALIAS error automatically) ---
+import PIL.Image
+if not hasattr(PIL.Image, 'ANTIALIAS'):
+    setattr(PIL.Image, 'ANTIALIAS', PIL.Image.LANCZOS)
+# -------------------------------------------------------------
+
 import os
 import json
 import asyncio
@@ -51,7 +57,7 @@ def download_pexels_videos(pexels_key: str, keywords: list):
                 video_paths.append(vid_name)
     return video_paths
 
-# 4. Concatenate and Render the Final Video (BYPASSING PIL ANTIALIAS ERROR)
+# 4. Concatenate and Render the Final Video
 def assemble_video(audio_path: str, video_paths: list, output_path: str = "final_short.mp4"):
     if not video_paths:
         raise ValueError("Could not find relevant videos from Pexels.")
@@ -65,10 +71,8 @@ def assemble_video(audio_path: str, video_paths: list, output_path: str = "final
         duration_to_use = min(clip_duration, clip.duration)
         clip = clip.subclip(0, duration_to_use)
         
-        # FIX: We bypass 'resize' completely and only use 'crop' to avoid PIL ANTIALIAS bug.
-        # Assuming Pexels gives vertical video, we just crop center if needed.
-        (w, h) = clip.size
-        clip = clip.crop(x_center=w/2, y_center=h/2, width=w, height=h) # Dummy crop to retain format
+        # Safe resize using patched PIL attribute
+        clip = clip.resize(height=1920)
         clips.append(clip)
         
     final_video = concatenate_videoclips(clips, method="compose")
