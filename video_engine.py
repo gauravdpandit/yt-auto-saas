@@ -6,25 +6,26 @@ import google.generativeai as genai
 import edge_tts
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
 
-# 1. Generate Script & Visual Keywords
+# 1. Generate Script (In Hindi) & Keywords (In English)
 def get_script_and_keywords(gemini_key: str, topic: str):
     genai.configure(api_key=gemini_key)
     model = genai.GenerativeModel('gemini-1.5-flash')
     
     prompt = f"""
     Write a highly engaging 30-second YouTube shorts script about '{topic}'.
-    Also provide 3 one-word search keywords representing the visual themes of the script to download background videos.
-    Output ONLY valid JSON in this exact format, with no markdown formatting or extra text:
-    {{"script": "your spoken script here", "keywords": ["keyword1", "keyword2", "keyword3"]}}
+    IMPORTANT: The spoken script MUST be in Hindi (Devanagari script). 
+    However, provide 3 one-word search keywords in ENGLISH representing the visual themes to download background videos.
+    Output ONLY valid JSON in this exact format, with no extra text:
+    {{"script": "your hindi spoken script here", "keywords": ["english_keyword1", "english_keyword2", "english_keyword3"]}}
     """
     
     response = model.generate_content(prompt)
     raw_text = response.text.strip().removeprefix("```json").removesuffix("```").strip()
     return json.loads(raw_text)
 
-# 2. Generate Neural Voiceover
-async def generate_voiceover(script: str, audio_path: str = "voice.mp3"):
-    communicate = edge_tts.Communicate(script, "en-US-ChristopherNeural")
+# 2. Generate Neural Voiceover (Receives Hindi Voice String)
+async def generate_voiceover(script: str, voice_model: str, audio_path: str = "voice.mp3"):
+    communicate = edge_tts.Communicate(script, voice_model)
     await communicate.save(audio_path)
 
 # 3. Fetch Vertical Videos from Pexels
@@ -39,10 +40,7 @@ def download_pexels_videos(pexels_key: str, keywords: list):
         if resp.status_code == 200:
             data = resp.json()
             if data.get('videos'):
-                # Grab the first video link available
                 link = data['videos'][0]['video_files'][0]['link']
-                
-                # Download and save the clip
                 vid_resp = requests.get(link, stream=True)
                 vid_name = f"clip_{i}.mp4"
                 with open(vid_name, 'wb') as f:
@@ -63,11 +61,9 @@ def assemble_video(audio_path: str, video_paths: list, output_path: str = "final
     clips = []
     for vp in video_paths:
         clip = VideoFileClip(vp)
-        # Subclip based on calculated duration
         duration_to_use = min(clip_duration, clip.duration)
         clip = clip.subclip(0, duration_to_use)
         
-        # Crop to strict 9:16 vertical ratio (1080x1920)
         clip = clip.resize(height=1920)
         clip = clip.crop(x_center=clip.w/2, y_center=clip.h/2, width=1080, height=1920)
         clips.append(clip)
@@ -75,10 +71,8 @@ def assemble_video(audio_path: str, video_paths: list, output_path: str = "final
     final_video = concatenate_videoclips(clips, method="compose")
     final_video = final_video.set_audio(audio)
     
-    # Exporting with fast preset for cloud rendering
     final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", preset="ultrafast", threads=4)
     
-    # Cleanup raw downloaded clips
     for vp in video_paths:
         os.remove(vp)
         
