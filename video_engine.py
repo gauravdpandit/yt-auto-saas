@@ -2,14 +2,13 @@ import os
 import json
 import asyncio
 import requests
-import google.generativeai as genai
 import edge_tts
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
 
-# 1. Generate Script (In Hindi) & Keywords (In English)
+# 1. Generate Script (In Hindi) & Keywords (In English) - DIRECT API CALL FIX
 def get_script_and_keywords(gemini_key: str, topic: str):
-    genai.configure(api_key=gemini_key)
-    model = genai.GenerativeModel('gemini-pro')
+    # This URL targets the newest Gemini 1.5 Flash model directly, bypassing any library bugs.
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
     
     prompt = f"""
     Write a highly engaging 30-second YouTube shorts script about '{topic}'.
@@ -19,8 +18,21 @@ def get_script_and_keywords(gemini_key: str, topic: str):
     {{"script": "your hindi spoken script here", "keywords": ["english_keyword1", "english_keyword2", "english_keyword3"]}}
     """
     
-    response = model.generate_content(prompt)
-    raw_text = response.text.strip().removeprefix("```json").removesuffix("```").strip()
+    payload = {
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.7}
+    }
+    
+    headers = {'Content-Type': 'application/json'}
+    
+    response = requests.post(url, headers=headers, json=payload)
+    
+    if response.status_code != 200:
+         raise Exception(f"API Error {response.status_code}: {response.text}")
+
+    # Extracting the text from the response structure
+    raw_text = response.json()['candidates'][0]['content']['parts'][0]['text']
+    raw_text = raw_text.strip().removeprefix("```json").removesuffix("```").strip()
     return json.loads(raw_text)
 
 # 2. Generate Neural Voiceover (Receives Hindi Voice String)
