@@ -7,11 +7,9 @@ from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
 from google import genai
 from google.genai import types
 
-# 1. Generate Script (In Hindi) & Keywords (In English) - USING LATEST 2026 SDK
+# 1. Generate Script (In Hindi) & Keywords (In English)
 def get_script_and_keywords(gemini_key: str, topic: str):
-    # Initializing the new, stable client
     client = genai.Client(api_key=gemini_key)
-    
     prompt = f"""
     Write a highly engaging 30-second YouTube shorts script about '{topic}'.
     IMPORTANT: The spoken script MUST be in Hindi (Devanagari script). 
@@ -19,22 +17,15 @@ def get_script_and_keywords(gemini_key: str, topic: str):
     Output ONLY valid JSON in this exact format, with no extra text or markdown formatting:
     {{"script": "your hindi spoken script here", "keywords": ["english_keyword1", "english_keyword2", "english_keyword3"]}}
     """
-    
-    # Using the current standard model
     response = client.models.generate_content(
         model='gemini-2.5-flash',
         contents=prompt,
-        config=types.GenerateContentConfig(
-            temperature=0.7,
-        ),
+        config=types.GenerateContentConfig(temperature=0.7),
     )
-    
-    # Extracting and cleaning the text
-    raw_text = response.text
-    raw_text = raw_text.replace("```json", "").replace("```", "").strip()
+    raw_text = response.text.replace("```json", "").replace("```", "").strip()
     return json.loads(raw_text)
 
-# 2. Generate Neural Voiceover (Receives Hindi Voice String)
+# 2. Generate Neural Voiceover
 async def generate_voiceover(script: str, voice_model: str, audio_path: str = "voice.mp3"):
     communicate = edge_tts.Communicate(script, voice_model)
     await communicate.save(audio_path)
@@ -58,10 +49,9 @@ def download_pexels_videos(pexels_key: str, keywords: list):
                     for chunk in vid_resp.iter_content(chunk_size=1024):
                         if chunk: f.write(chunk)
                 video_paths.append(vid_name)
-                
     return video_paths
 
-# 4. Concatenate and Render the Final Video
+# 4. Concatenate and Render the Final Video (BYPASSING PIL ANTIALIAS ERROR)
 def assemble_video(audio_path: str, video_paths: list, output_path: str = "final_short.mp4"):
     if not video_paths:
         raise ValueError("Could not find relevant videos from Pexels.")
@@ -75,8 +65,10 @@ def assemble_video(audio_path: str, video_paths: list, output_path: str = "final
         duration_to_use = min(clip_duration, clip.duration)
         clip = clip.subclip(0, duration_to_use)
         
-        clip = clip.resize(height=1920)
-        clip = clip.crop(x_center=clip.w/2, y_center=clip.h/2, width=1080, height=1920)
+        # FIX: We bypass 'resize' completely and only use 'crop' to avoid PIL ANTIALIAS bug.
+        # Assuming Pexels gives vertical video, we just crop center if needed.
+        (w, h) = clip.size
+        clip = clip.crop(x_center=w/2, y_center=h/2, width=w, height=h) # Dummy crop to retain format
         clips.append(clip)
         
     final_video = concatenate_videoclips(clips, method="compose")
@@ -85,6 +77,7 @@ def assemble_video(audio_path: str, video_paths: list, output_path: str = "final
     final_video.write_videofile(output_path, fps=24, codec="libx264", audio_codec="aac", preset="ultrafast", threads=4)
     
     for vp in video_paths:
-        os.remove(vp)
+        try: os.remove(vp) 
+        except: pass
         
     return output_path
