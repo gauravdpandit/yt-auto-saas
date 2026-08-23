@@ -1,42 +1,107 @@
 import streamlit as st
 import asyncio
+import os
 from video_engine import get_script_and_keywords, generate_voiceover, download_pexels_videos, assemble_video
 
-st.set_page_config(page_title="AI Shorts Pro", layout="centered")
-st.title("🚀 AI YouTube Shorts Generator")
-st.write("Generate a complete faceless video with AI script, voiceover, and stock footage!")
+# --- PAGE CONFIGURATION (Pro Look) ---
+st.set_page_config(
+    page_title="Pro AI Shorts Builder",
+    page_icon="⚡",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
+# --- CUSTOM CSS FOR PREMIUM FEEL ---
+st.markdown("""
+<style>
+    .main-title { font-size: 3rem; font-weight: 800; color: #FF4B4B; margin-bottom: 0px;}
+    .sub-title { font-size: 1.2rem; color: #888; margin-bottom: 2rem;}
+    .stButton>button { width: 100%; border-radius: 8px; font-weight: bold; background-color: #FF4B4B; color: white;}
+</style>
+""", unsafe_allow_html=True)
+
+# --- HEADER SECTION ---
+st.markdown('<p class="main-title">⚡ AutoShorts AI Pro</p>', unsafe_allow_html=True)
+st.markdown('<p class="sub-title">Fully Automated Faceless Video Pipeline (Script -> Voice -> Render)</p>', unsafe_allow_html=True)
+
+# --- SIDEBAR (Settings & APIs) ---
 with st.sidebar:
-    st.header("🔑 API Setup")
-    gemini_key = st.text_input("Gemini API Key", type="password")
-    pexels_key = st.text_input("Pexels API Key", type="password")
-    st.markdown("[Get Free Gemini Key](https://aistudio.google.com/)")
-    st.markdown("[Get Free Pexels Key](https://www.pexels.com/api/)")
+    st.header("⚙️ Engine Configuration")
+    
+    st.subheader("1. API Keys (Required)")
+    gemini_key = st.text_input("Google Gemini API Key", type="password", help="Needed for Script Generation")
+    pexels_key = st.text_input("Pexels Video API Key", type="password", help="Needed for HD Stock Footage")
+    
+    st.markdown("---")
+    st.subheader("2. Video Settings")
+    video_length = st.select_slider("Target Duration", options=["15 Sec", "30 Sec", "60 Sec"], value="30 Sec")
+    voice_type = st.selectbox("AI Voice Actor", ["Male (Deep)", "Female (Clear)"])
+    
+    st.markdown("---")
+    st.info("No credit card required. API keys run directly on your browser session for maximum security.")
 
-topic = st.text_input("Enter Video Topic", placeholder="e.g., Top 3 Mysteries of Ancient Egypt")
+# --- MAIN CONTENT AREA ---
+col1, col2 = st.columns([2, 1])
 
-if st.button("Generate Short 🎬"):
+with col1:
+    st.subheader("🎬 Create New Project")
+    topic = st.text_area("What should the video be about?", placeholder="e.g., Explain Quantum Physics in simple terms...", height=100)
+    generate_btn = st.button("🚀 Initialize AI Pipeline")
+
+with col2:
+    st.subheader("📊 Output Console")
+    status_box = st.empty()
+    status_box.info("Waiting for project details...")
+
+# --- PROCESSING LOGIC ---
+if generate_btn:
     if not gemini_key or not pexels_key or not topic:
-        st.error("Please enter your API keys in the sidebar and a video topic!")
+        status_box.error("⚠️ Missing Configuration! Please check API keys and Topic.")
     else:
+        # Determine voice string for edge-tts
+        voice_str = "en-US-ChristopherNeural" if voice_type == "Male (Deep)" else "en-US-AriaNeural"
+        
         try:
-            with st.spinner("1/4: AI Writing Script & Extracting Keywords..."):
-                data = get_script_and_keywords(gemini_key, topic)
-                st.success(f"Keywords Found: {', '.join(data['keywords'])}")
-                st.text_area("Generated Script", data['script'], height=120)
-                
-            with st.spinner("2/4: Generating Neural Voiceover..."):
-                asyncio.run(generate_voiceover(data['script']))
-                
-            with st.spinner("3/4: Downloading B-Rolls from Pexels..."):
-                video_paths = download_pexels_videos(pexels_key, data['keywords'])
-                st.success(f"Downloaded {len(video_paths)} background clips!")
-                
-            with st.spinner("4/4: Stitching & Rendering Video (This takes 1-2 minutes)..."):
-                final_file = assemble_video("voice.mp3", video_paths)
-                
-            st.success("🎉 Video Ready to Upload!")
+            progress_bar = st.progress(0)
+            status_box.info("🤖 AI is thinking... (Step 1/4)")
+            
+            # Step 1: Script & Keywords
+            data = get_script_and_keywords(gemini_key, topic)
+            progress_bar.progress(25)
+            with st.expander("📝 View AI Generated Script", expanded=True):
+                st.write(data['script'])
+                st.caption(f"Tags: {', '.join(data['keywords'])}")
+            
+            # Step 2: Voiceover
+            status_box.info("🎙️ Synthesizing Neural Voice... (Step 2/4)")
+            asyncio.run(generate_voiceover(data['script'], "voice.mp3")) # Ensure video_engine uses this parameter
+            progress_bar.progress(50)
+            
+            # Step 3: Stock Videos
+            status_box.info("🎥 Hunting for HD B-Rolls... (Step 3/4)")
+            video_paths = download_pexels_videos(pexels_key, data['keywords'])
+            progress_bar.progress(75)
+            
+            # Step 4: Rendering
+            status_box.warning("⏳ Rendering Video Engine... Please don't close tab (Step 4/4)")
+            final_file = assemble_video("voice.mp3", video_paths)
+            progress_bar.progress(100)
+            
+            # --- FINAL OUTPUT ---
+            status_box.success("✅ Render Complete!")
+            
+            st.markdown("---")
+            st.subheader("📺 Final Export")
             st.video(final_file)
             
+            # Download Button
+            with open(final_file, "rb") as file:
+                btn = st.download_button(
+                    label="⬇️ Download Ultra HD Short",
+                    data=file,
+                    file_name="AutoShort_AI.mp4",
+                    mime="video/mp4"
+                )
+                
         except Exception as e:
-            st.error(f"An error occurred during generation: {e}")
+            status_box.error(f"❌ Pipeline Failure: {str(e)}")
