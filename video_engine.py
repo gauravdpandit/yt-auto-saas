@@ -5,16 +5,16 @@ import requests
 import edge_tts
 from moviepy.editor import VideoFileClip, AudioFileClip, concatenate_videoclips
 
-# 1. Generate Script (In Hindi) & Keywords (In English) - DIRECT API CALL FIX
+# 1. Generate Script (In Hindi) & Keywords (In English) - DIRECT API CALL TO GEMINI-PRO
 def get_script_and_keywords(gemini_key: str, topic: str):
-    # This URL targets the newest Gemini 1.5 Flash model directly, bypassing any library bugs.
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={gemini_key}"
+    # Using 'gemini-pro' as it is the most stable universally supported model right now
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent?key={gemini_key}"
     
     prompt = f"""
     Write a highly engaging 30-second YouTube shorts script about '{topic}'.
     IMPORTANT: The spoken script MUST be in Hindi (Devanagari script). 
     However, provide 3 one-word search keywords in ENGLISH representing the visual themes to download background videos.
-    Output ONLY valid JSON in this exact format, with no extra text:
+    Output ONLY valid JSON in this exact format, with no extra text or markdown formatting:
     {{"script": "your hindi spoken script here", "keywords": ["english_keyword1", "english_keyword2", "english_keyword3"]}}
     """
     
@@ -32,7 +32,8 @@ def get_script_and_keywords(gemini_key: str, topic: str):
 
     # Extracting the text from the response structure
     raw_text = response.json()['candidates'][0]['content']['parts'][0]['text']
-    raw_text = raw_text.strip().removeprefix("```json").removesuffix("```").strip()
+    # Clean up any potential markdown formatting
+    raw_text = raw_text.replace("```json", "").replace("```", "").strip()
     return json.loads(raw_text)
 
 # 2. Generate Neural Voiceover (Receives Hindi Voice String)
